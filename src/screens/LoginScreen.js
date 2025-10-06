@@ -15,11 +15,30 @@ import { AppContext } from "../Context/AppContext";
 
 export default function LoginScreen({navigation}) {
 
-  const { userLoggedIn, setUserLoggedIn } = useContext(AppContext);
+  const { setUserLoggedIn, Urls, postData, Toast } = useContext(AppContext);
 
-  const [email, setEmail] = useState('info@adminuiux');
+  const [username, setusername] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+
+
+  const handleLogin = async () => {
+      if (!username || !password) {
+        Toast.show({ type: "error", text1: 'Please enter username and password' })
+        return;
+      }
+      const filedata = {
+        "username":username,
+        "password":password,
+      };
+    const response = await postData(filedata, Urls.login,"POST");
+    if(response.action=='login')
+    {
+      setUserLoggedIn(true);
+    }
+  };
+
+
  
   return (
     
@@ -38,10 +57,10 @@ export default function LoginScreen({navigation}) {
         <Text style={appstyles.brand}>Shivveda</Text>
 
         <TextInput
-          placeholder="Email Address"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
+          placeholder="Mobile Number"
+          value={username}
+          onChangeText={setusername}
+          keyboardType="default"
           autoCapitalize="none"
           style={appstyles.input}
         />
@@ -63,8 +82,8 @@ export default function LoginScreen({navigation}) {
         </View>
 
 
-        {/* Login Button */}
-        <TouchableOpacity style={appstyles.loginBtn} onPress={()=> setUserLoggedIn(true)}>
+        {/* Login Button */} 
+        <TouchableOpacity style={appstyles.loginBtn} onPress={handleLogin}>
           <Text style={appstyles.loginBtnText}>Login</Text>
         </TouchableOpacity>
 

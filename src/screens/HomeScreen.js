@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef, useContext } from "react";
-import { View, Text, FlatList, Modal, TouchableOpacity, Linking, ScrollView } from "react-native";
+import React, { useEffect, useState, useRef, useContext, useCallback } from "react";
+import { View, Text, FlatList, Modal, TouchableOpacity, Linking, ScrollView, RefreshControl, TextInput } from "react-native";
 import io from "socket.io-client";
 import Icon from "react-native-vector-icons/Ionicons";
 import Sound from "react-native-sound";
@@ -7,43 +7,38 @@ import appstyles, { colors } from "../assets/app";
 import { StyleSheet, Dimensions } from "react-native";
 import { Image } from "react-native";
 import { AppContext } from '../Context/AppContext';
+import PageLoading from "../components/Loader/PageLoding";
 const { width } = Dimensions.get('window');
 export default function HomeScreen({ route, navigation }) {
 
-  const { setUserLoggedIn } = useContext(AppContext);
-  const [activeTab, setActiveTab] = useState("New");
-
-  const deviceId = "sfsf";
+  const { deviceId, handleLogout, setUserLoggedIn, Urls, postData, Toast, user } = useContext(AppContext);
+  // console.log(deviceId)
+   
   const [socket, setSocket] = useState(null);
   const [incomingData, setIncomingData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  
+  
 
-  // Ref to keep track of sound instance
+  // Ref to keep track of sound instance 
   const soundRef = useRef(null);
 
-  const contacts = [
-    { id: 1, number: "9999999999" },
-    { id: 2, number: "8888888888" },
-    { id: 3, number: "7777777777" },
-    { id: 4, number: "7777777777" },
-    { id: 5, number: "7777777777" }, 
-    { id: 6, number: "7777777777" },
-    { id: 7, number: "7777777777" },
-    { id: 8, number: "7777777777" },
-    { id: 9, number: "7777777777" },
-    { id: 10, number: "7777777777" },
-    { id: 11, number: "7777777777" },
-    { id: 12, number: "7777777777" },
-    { id: 13, number: "7777777777" },
-    { id: 14, number: "7777777777" },
-    { id: 15, number: "7777777777" },
-    { id: 16, number: "7777777777" },
-    { id: 17, number: "7777777777" },
-  ];
-
+  const types = [
+    { id: 0, text: "New" }, 
+    { id: 1, text: "Called" },    
+  ]; 
+ 
+  
   useEffect(() => {
-    const newSocket = io("http://192.168.1.61:3000");
-    setSocket(newSocket);
+    // const newSocket = io("https://145.223.18.56:3003");
+
+    const newSocket = io("http://145.223.18.56:3003", {
+      transports: ["websocket"],
+      secure: true,
+      rejectUnauthorized: false, // ✅ important for self-signed cert
+    });
+
+    setSocket(newSocket); 
 
     newSocket.on("connect", () => {
       console.log("Socket connected:", newSocket.id);
@@ -92,136 +87,449 @@ export default function HomeScreen({ route, navigation }) {
     }
   };
 
-  const handleCall = () => {
+  const handleCall = async (id,phone) => {
+
     stopSound(); // stop sound when call starts
-    if (incomingData?.phone) {
-      Linking.openURL(`tel:${incomingData.phone}`);
-      fetch("http://YOUR_API/call-log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: incomingData.phone, status: "called" }),
-      });
+    if (phone) {
+      Linking.openURL(`tel:${phone}`);
       setModalVisible(false);
+    }
+
+    if(id){
+      const filedata = {id:id};
+      const response = await postData(filedata, Urls.leadScretch,"POST",1,1);
+      if(response.status==200)
+      {
+        setPage(0);
+        fetchdata()
+      }
     }
   };
 
-  const renderContact = ({ item }) => (
-    <TouchableOpacity
-      style={appstyles.card}
-      onPress={() => navigation.navigate("CallLog", { number: item.number })}
-    >
-      <Icon name="call-outline" size={22} color={colors.primary} />
-      <Text style={[appstyles.value, { marginLeft: 10 }]}>{item.number}</Text>
-    </TouchableOpacity>
-  );
+  const [isOnline, setIsOnline] = useState(user.is_online);
 
+  const toggleStatus = async () => {  
+    
+    const response = await postData({employee_id:user.id}, Urls.online_offline,"POST");
+    if(response.status==200)
+    {      
+      setIsOnline(response.data.is_online);
+    }
+  };
+
+
+  const handleType = async (type) => {
+    settype(type)
+  };
+
+  const [typingTimeout, setTypingTimeout] = useState(null);
+  const [search, setsearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [type, settype] = useState(0);
+  const [isLoading, setisLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [data, setdata] = useState([]);
+  const onRefresh = useCallback(() => {
+    setPage(0);
+    setRefreshing(true);
+    setRefreshing(false); 
+    fetchdata(); 
+  }, []);
+  const handleTyping = (value) => {
+    setsearch(value);
+
+    // Clear previous timeout
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+
+    // Set a new timeout (e.g., 1 second)
+    const timeout = setTimeout(() => {
+          onTypingStopped(value);
+      }, 500);
+      setTypingTimeout(timeout);
+    };
+    const onTypingStopped = (value) => {
+      console.log("User stopped typing. Final value:", value);
+      setPage(0);
+      fetchdata();
+  };
+  
+    const fetchdata = async () => {
+        const filedata = {
+          page:page,
+          search:search,
+          type:type,
+        };
+      const response = await postData(filedata, Urls.lead,"GET",0,1);
+      if(response.status==200)
+      {
+        const data = response.data;
+        setdata(prevPosts => page === 0 ? data : [...prevPosts, ...data]); 
+        setisLoading(false);
+      }
+    };  
+    
+  const handleLoadMore = () => {
+    setPage(page + 1);      
+  };
+  useEffect(() => {
+    fetchdata()
+  }, [type, page]);
+  if (isLoading) {
+    return (
+        <PageLoading />          
+    );
+  }
+
+
+
+
+
+  
   return (
-    <ScrollView style={appstyles.container}>
+    <View flex={1}>
       <View style={styles.header}>
-          <View style={styles.headerLeft}>            
-            <Image
-              source={require('../assets/img/logo.png')}
-              style={styles.logo}
-            />
-          </View>
-          <TouchableOpacity onPress={() => {
-            setUserLoggedIn(false)
-            // handle logout
-            
-          }} >
+        <View style={styles.headerLeft}>            
+          <Image
+            source={require('../assets/img/logo.png')}
+            style={styles.logo}
+          />
+        </View>
+
+        <View style={styles.headerRight}>
+          {/* Online/Offline toggle */}
+          <TouchableOpacity 
+            style={[styles.statusBtn, { backgroundColor: isOnline ? colors.primary : "#FF3B30" }]}
+            onPress={toggleStatus}
+          >
+            <View style={styles.statusDotContainer}>
+              <View style={[styles.statusDot, { backgroundColor: isOnline ? "#00FF00" : "#FF0000" }]} />
+            </View>
+            <Text style={styles.statusText}>{isOnline ? "Online" : "Offline"}</Text>
+          </TouchableOpacity>
+
+          {/* Logout icon */}
+          <TouchableOpacity onPress={handleLogout}>
             <Icon name="log-out-outline" style={styles.menu} />
           </TouchableOpacity>
         </View>
-      <Text style={appstyles.brand}>Contact Numbers</Text>
-
-      {/* Tabs */}
-      <View style={styles.tabContainer}>
-        {["New", "Called", "Missed"].map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
-      <View style={{ paddingBottom: 20 }}>
-        {contacts.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={appstyles.card}
-            onPress={() => navigation.navigate("CallLog", { number: item.number })}
-          >
-            <Icon name="call-outline" size={22} color={colors.primary} />
-            <Text style={[{ marginLeft: 10 }]}>{item.number}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
 
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <View style={appstyles.modalOverlay}>
-          <View style={appstyles.modalBox}>
-            <Text style={appstyles.modalTitle}>Incoming Request</Text>
+      <ScrollView style={appstyles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      onScroll={({ nativeEvent }) => {
+        const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+        const paddingToBottom = 100; // pixel threshold before bottom
+        if (
+          layoutMeasurement.height + contentOffset.y >=
+          contentSize.height - paddingToBottom
+        ) {
+          handleLoadMore(); // call when near bottom
+        }
+      }}
+      scrollEventThrottle={400}
+      >
+        
+        <Text style={appstyles.brand}>Contact Numbers</Text>
 
-            <View style={appstyles.detailBox}>
-              <Text style={appstyles.label}>Name:</Text>
-              <Text style={appstyles.value}>{incomingData?.name}</Text>
+        {/* Tabs */}
+        <View style={styles.tabContainer}>
+          {types.map((tab) => (
+            <TouchableOpacity
+              key={tab.id} 
+              style={[styles.tab, type === tab.id && styles.activeTab]}
+              onPress={() => {settype(tab.id);setPage(0);}}
+            >
+              <Text style={[styles.tabText, type === tab.id && styles.activeTabText]}>
+                {tab.text}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TextInput
+            placeholder="Search Keyword..."
+            value={search}
+            onChangeText={handleTyping}
+            keyboardType="default"
+            style={[appstyles.input]}
+          />
+
+
+            
+            <View style={{ paddingBottom: 20 }}>
+              {data.map((item, index) => (
+                <View            
+                  key={`${item.id}-${index}`}
+                  style={appstyles.card}
+                >
+                  <View style={[styles.row]}>
+                    
+                    <View style={[styles.col8]}> 
+                      <View style={[styles.col12]}> 
+                        <Text style={[{ marginLeft: 0 }]}>{item.name}</Text>
+
+                        {/* Email clickable */}
+                        {item.email ? (
+                          <Text
+                            style={[{ marginLeft: 0, color: colors.primary }]}
+                            onPress={() => Linking.openURL(`mailto:${item.email}`)}
+                          >
+                            {item.email}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={[styles.col12]}>
+                        <Text style={[{ marginLeft: 0, },styles.phone]}>{item.phone}</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.col4]}>                    
+                      {/* Call Icon */}
+                      <TouchableOpacity onPress={() => handleCall(item.id, item.phone)}>
+                        <Icon name="call-outline"
+                          style={[styles.iconCall]}
+                          color={colors.white} 
+                        />
+                      </TouchableOpacity> 
+
+                      {/* WhatsApp Icon */}
+                      {item.phone ? (
+                        <TouchableOpacity onPress={() => Linking.openURL(`https://wa.me/${item.phone}`)}>
+                          <Icon name="logo-whatsapp"
+                            style={[styles.iconCallWhatsApp]}
+                            color="white"
+                          />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+
+                  </View>
+                </View>
+              ))}
             </View>
-            <View style={appstyles.detailBox}>
-              <Text style={appstyles.label}>Email:</Text>
-              <Text style={appstyles.value}>{incomingData?.email}</Text>
-            </View>
-            <View style={appstyles.detailBox}>
-              <Text style={appstyles.label}>Phone:</Text>
-              <Text style={appstyles.value}>{incomingData?.phone}</Text>
-            </View>
 
-            <View style={appstyles.modalActions}>
-              <TouchableOpacity style={appstyles.callBtn} onPress={handleCall}>
-                <Icon name="call" size={24} color={colors.white} />
-                <Text style={appstyles.btnText}>Call Now</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={appstyles.closeBtn}
-                onPress={() => {
-                  stopSound(); // stop sound when modal closes
-                  setModalVisible(false);
-                }}
-              >
-                <Icon name="close-circle-outline" size={22} color={colors.grey} />
-                <Text style={[appstyles.btnText, { color: colors.grey }]}>Close</Text>
-              </TouchableOpacity>
+        <Modal visible={modalVisible} transparent animationType="fade">
+          <View style={appstyles.modalOverlay}>
+            <View style={appstyles.modalBox}>
+              <Text style={appstyles.modalTitle}>Incoming Request</Text>
+
+              <View style={appstyles.detailBox}>
+                <Text style={appstyles.label}>Name:</Text>
+                <Text style={appstyles.value}>{incomingData?.name}</Text>
+              </View>
+              <View style={appstyles.detailBox}>
+                <Text style={appstyles.label}>Email:</Text>
+                <Text style={appstyles.value}>{incomingData?.email}</Text>
+              </View>
+              <View style={appstyles.detailBox}>
+                <Text style={appstyles.label}>Phone:</Text>
+                <Text style={appstyles.value}>{incomingData?.phone}</Text>
+              </View>
+
+              <View style={[appstyles.modalActions, styles.row]}>
+                <TouchableOpacity  onPress={() => handleCall(incomingData?.id, incomingData?.phone)}>
+                  <Icon name="call" 
+                  style={[styles.iconCall]}
+                  color={colors.white} 
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    stopSound(); // stop sound when modal closes
+                    setModalVisible(false);
+                  }}
+                >
+                  <Icon name="call" 
+                  style={[styles.iconCallRed]}
+                  color={colors.white}  
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
-    </ScrollView>
-  );
+        </Modal>
+      </ScrollView>
+    </View>
+  ); 
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f6f8f5' },
+  screen: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
+
+  // 🔹 Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 0, 
+    backgroundColor: colors.black,
+    paddingVertical: 5,
+    paddingHorizontal: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  menu:{
+  headerLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  logo: { 
+    width: 150, 
+    height: 45, 
+    resizeMode: 'contain',
+  },
+  menu: {
+    fontSize: 28,
+    color: colors.white,
+  },
+  iconCall:{
+    backgroundColor:'lightgreen',
     fontSize:30,
-    color:'white'
+    borderRadius:50,
+    padding:5,
+    width:45,
+    height:45,
+    borderWidth:2,
+    borderColor:'lightgray'
   },
-  logo: { width: 150, height: 40, borderRadius: 0, marginLeft: -15, resizeMode:'contain' },
+  iconCallRed:{
+    backgroundColor:'red', 
+    fontSize:35, 
+    borderRadius:50,
+    padding:5,
+    width:50,
+    height:50,
+    borderWidth:2,
+    borderColor:'lightgray'
+  },
+  iconCallWhatsApp: {
+    backgroundColor: '#25D366', // WhatsApp green
+    fontSize: 30,
+    borderRadius: 50,
+    padding: 5,
+    width: 45,
+    height: 45,
+    borderWidth: 2,
+    borderColor: 'lightgray',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    marginTop:5
+  },
 
-  tabContainer: { flexDirection: 'row', marginVertical: 10, justifyContent: 'space-around' },
-  tab: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#e0e0e0' },
-  activeTab: { backgroundColor: colors.primary },
-  tabText: { color: '#000', fontWeight: 'bold' },
-  activeTabText: { color: '#fff' },
+
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  
+  statusBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  
+  statusDotContainer: {
+    width: 10,
+    height: 10,
+    marginRight: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  
+  statusText: {
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: 13,
+  },
+
+
+  
+
+  // 🔹 Tabs
+  tabContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between',
+    backgroundColor: '#EEE',
+    borderRadius: 25,
+    overflow: 'hidden',
+    marginBottom: 15,
+  },
+  tab: { 
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  activeTab: { 
+    backgroundColor: colors.primary,
+  },
+  tabText: { 
+    color: colors.grey, 
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  activeTabText: { 
+    color: colors.white,
+    fontWeight: '700',
+  },
+
+  // 🔹 List Rows
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  col8: {
+    width: '85%',
+  },
+  col4: {
+    width: '15%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  col12: {
+    width: '100%',
+  },
+  phone: {
+    fontSize: 18,
+    textAlign: 'left',
+    color: colors.primaryDark,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+
+  // 🔹 ScrollView Padding
+  content: {
+    paddingBottom: 30,
+  },
+
+  // 🔹 Empty State / Bottom Padding
+  emptyText: {
+    textAlign: 'center',
+    color: colors.grey,
+    fontSize: 15,
+    marginTop: 30,
+  },
 });

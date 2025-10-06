@@ -26,7 +26,7 @@ adb connect 192.168.1.29:5555
 adb devices
 adb tcpip 5555
 adb connect 192.168.1.32:5555
-adb connect 192.168.1.4:5555
+adb connect 192.168.1.6:5555
 adb connect 192.168.1.61:5555
 
 
