@@ -15,7 +15,7 @@ const appstyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    padding: 20,
+    padding: 10,
   },
 
   logoHeader: {
@@ -72,7 +72,8 @@ const appstyles = StyleSheet.create({
   },
   eyeButton: {
     marginLeft: -40,
-  },
+    marginTop:-10,
+  }, 
   eyeIcon: {
     fontSize: 18,
     color: colors.grey,
@@ -146,7 +147,7 @@ const appstyles = StyleSheet.create({
   },
   value: {
     flex: 1,
-    color: colors.black,
+    color: colors.black, 
   },
 
   modalActions: {

@@ -174,6 +174,7 @@ export const AppProvider = ({ children }) => {
             await storage.set("token", result?.token);
             await storage.set("user", JSON.stringify(result?.data));
             setUser(result?.data);
+            setUserLoggedIn(true);
             return result;             
   
             case "tokenUpdate":
@@ -185,6 +186,7 @@ export const AppProvider = ({ children }) => {
             case "register":
               await storage.set("token", result?.token);
               await storage.set("user", JSON.stringify(result?.data));
+              setUserLoggedIn(true);
               setUser(result?.data);
               return result;  
               
@@ -216,8 +218,10 @@ export const AppProvider = ({ children }) => {
           return result;          
         } 
         else if (result.status === 401) {
-            storage.delete('token');
-            storage.delete('user');            
+          storage.delete('token'); 
+          storage.delete('user');
+          setUserLoggedIn(false);
+          setUser(null);         
             return result;
         } 
         else if (result.status === 419) {

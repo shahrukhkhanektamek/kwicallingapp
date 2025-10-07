@@ -18,8 +18,8 @@ export default function HomeScreen({ route, navigation }) {
   const [incomingData, setIncomingData] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   
-  
-
+   
+ 
   // Ref to keep track of sound instance 
   const soundRef = useRef(null);
 
@@ -30,12 +30,15 @@ export default function HomeScreen({ route, navigation }) {
  
   
   useEffect(() => {
-    // const newSocket = io("https://145.223.18.56:3003");
+    const serverIp = 'http://145.223.18.56:3003'; 
+    // const serverIp = 'http://localhost:3003'; 
+    // const newSocket = io(serverIp);
+     
 
-    const newSocket = io("http://145.223.18.56:3003", {
+    const newSocket = io(serverIp, {
       transports: ["websocket"],
       secure: true,
-      rejectUnauthorized: false, // ✅ important for self-signed cert
+      rejectUnauthorized: true, // ✅ important for self-signed cert
     });
 
     setSocket(newSocket); 
@@ -55,7 +58,7 @@ export default function HomeScreen({ route, navigation }) {
     return () => {
       stopSound(); // stop sound when component unmounts
       newSocket.disconnect();
-    };
+    }; 
   }, []);
 
   // Play looping sound
@@ -118,9 +121,26 @@ export default function HomeScreen({ route, navigation }) {
   };
 
 
-  const handleType = async (type) => {
-    settype(type)
+  const [isDropdownVisible, setIsDropdownVisible] = useState(false);
+  const [paidunpaid, setpaidunpaid] = useState();
+  const [selectedStatus, setSelectedStatus] = useState('All');
+
+  const options = [
+    { label: "All", value: false },
+    { label: "Paid", value: 1 },
+    { label: "Unpaid", value: 0 },
+  ];
+
+  const toggleDropdown = () => {
+    setIsDropdownVisible(!isDropdownVisible);
   };
+
+  const handleSelect = (item) => {
+    setSelectedStatus(item.label);
+    setpaidunpaid(item.value);
+    setIsDropdownVisible(false);
+  };
+ 
 
   const [typingTimeout, setTypingTimeout] = useState(null);
   const [search, setsearch] = useState('');
@@ -134,7 +154,7 @@ export default function HomeScreen({ route, navigation }) {
     setRefreshing(true);
     setRefreshing(false); 
     fetchdata(); 
-  }, []);
+  }, [type, page, paidunpaid]);
   const handleTyping = (value) => {
     setsearch(value);
 
@@ -160,6 +180,7 @@ export default function HomeScreen({ route, navigation }) {
           page:page,
           search:search,
           type:type,
+          paidunpaid:paidunpaid,
         };
       const response = await postData(filedata, Urls.lead,"GET",0,1);
       if(response.status==200)
@@ -172,10 +193,10 @@ export default function HomeScreen({ route, navigation }) {
     
   const handleLoadMore = () => {
     setPage(page + 1);      
-  };
+  }; 
   useEffect(() => {
     fetchdata()
-  }, [type, page]);
+  }, [type, page, paidunpaid]);
   if (isLoading) {
     return (
         <PageLoading />          
@@ -217,7 +238,7 @@ export default function HomeScreen({ route, navigation }) {
       </View>
 
 
-      <ScrollView style={appstyles.container}
+      <ScrollView style={[appstyles.container, {paddingTop:5}]}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
@@ -234,22 +255,56 @@ export default function HomeScreen({ route, navigation }) {
       scrollEventThrottle={400}
       >
         
-        <Text style={appstyles.brand}>Contact Numbers</Text>
+        {/* <Text style={appstyles.brand}>Contact Numbers</Text> */}
 
         {/* Tabs */}
-        <View style={styles.tabContainer}>
-          {types.map((tab) => (
-            <TouchableOpacity
-              key={tab.id} 
-              style={[styles.tab, type === tab.id && styles.activeTab]}
-              onPress={() => {settype(tab.id);setPage(0);}}
-            >
-              <Text style={[styles.tabText, type === tab.id && styles.activeTabText]}>
-                {tab.text}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <View style={[styles.row, {alignItems:'center', justifyContent:'space-between'}]}>
+            <View style={[styles.col6, {width:'65%'}]}>
+              <View style={styles.tabContainer}>
+                  {types.map((tab) => (
+                    <TouchableOpacity
+                      key={tab.id} 
+                      style={[styles.tab, type === tab.id && styles.activeTab]}
+                      onPress={() => {settype(tab.id);setPage(0);}}
+                    >
+                      <Text style={[styles.tabText, type === tab.id && styles.activeTabText]}>
+                        {tab.text}
+                      </Text>
+                    </TouchableOpacity>
+                  ))} 
+              </View>
+            </View>
+            <View style={[styles.col6, {width:'30%'}]}>
+              <View>
+                <View style={styles.tabContainer}>
+                  <TouchableOpacity
+                    style={[styles.tab]}
+                    onPress={toggleDropdown}
+                  >
+                    <Text style={[styles.tabText]}>
+                      <Text style={styles.tabText}>{selectedStatus}</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {isDropdownVisible && (
+                  <View style={styles.dropdownBox}>
+                    {options.map((item) => (
+                      <TouchableOpacity
+                        key={item.value.toString()}
+                        style={styles.dropdownItem}
+                        onPress={() => handleSelect(item)}
+                      >
+                        <Text style={styles.dropdownText}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+
 
         <TextInput
             placeholder="Search Keyword..."
@@ -285,6 +340,12 @@ export default function HomeScreen({ route, navigation }) {
                       </View>
                       <View style={[styles.col12]}>
                         <Text style={[{ marginLeft: 0, },styles.phone]}>{item.phone}</Text>
+                      </View>
+                      <View style={[styles.col12]}>
+                        <Text style={[{ marginLeft: 0, },styles.status_text,
+                        {backgroundColor:item.leadStatus==1?'lightgreen':'red'}
+
+                        ]}>{item.status_text}</Text>
                       </View>
                     </View>
 
@@ -325,12 +386,16 @@ export default function HomeScreen({ route, navigation }) {
               </View>
               <View style={appstyles.detailBox}>
                 <Text style={appstyles.label}>Email:</Text>
-                <Text style={appstyles.value}>{incomingData?.email}</Text>
+                <Text style={appstyles.value}>{incomingData?.email}</Text> 
               </View>
               <View style={appstyles.detailBox}>
                 <Text style={appstyles.label}>Phone:</Text>
                 <Text style={appstyles.value}>{incomingData?.phone}</Text>
               </View>
+              <Text style={[{ marginLeft: 0, },styles.status_text,
+                {backgroundColor:incomingData?.leadStatus==1?'lightgreen':'red'}
+
+                ]}>{incomingData?.status_text}</Text>
 
               <View style={[appstyles.modalActions, styles.row]}>
                 <TouchableOpacity  onPress={() => handleCall(incomingData?.id, incomingData?.phone)}>
@@ -464,6 +529,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
+  status_text:{
+    backgroundColor:'green',
+    width:80,
+    color:'white',
+    textAlign:'center',
+    borderRadius:5
+  },
+
 
   
 
@@ -474,7 +547,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEE',
     borderRadius: 25,
     overflow: 'hidden',
-    marginBottom: 15,
+    marginBottom: 5,
   },
   tab: { 
     flex: 1,
@@ -495,6 +568,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+
+
+  dropdownBox: {
+    position: "absolute",
+    top: 50,
+    right: 0,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    width: 120,
+    zIndex: 999,
+  },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  dropdownText: {
+    color: "#333",
+    fontSize: 14,
+  },
+  
+
+
+
   // 🔹 List Rows
   row: {
     flexDirection: 'row',
@@ -511,6 +613,9 @@ const styles = StyleSheet.create({
   },
   col12: {
     width: '100%',
+  },
+  col6: {
+    width: '50%',
   },
   phone: {
     fontSize: 18,

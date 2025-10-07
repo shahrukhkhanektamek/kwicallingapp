@@ -71,7 +71,7 @@ export default function LoginScreen({navigation}) {
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPass}
-            style={[appstyles.input, { flex: 1 }]}
+            style={[appstyles.input, { width:'100%' }]}
           />
           <TouchableOpacity
             style={appstyles.eyeButton}
